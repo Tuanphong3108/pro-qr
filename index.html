@@ -222,6 +222,18 @@
         </div>
     </main>
 
+    <!-- Dialog xác nhận tải ảnh (Chiêu mới) -->
+    <md-dialog id="upload-confirm-dialog">
+        <div slot="headline">Tải ảnh lên?</div>
+        <div slot="content">Trình duyệt đã được làm mới để sẵn sàng xử lý tệp tin hoặc camera mới. Bro muốn làm gì tiếp theo?</div>
+        <div slot="actions">
+            <md-filled-button id="confirm-upload-action">
+                <span slot="icon" class="material-symbols-outlined">upload_file</span> Tải lên
+            </md-filled-button>
+            <md-text-button id="confirm-camera-action">Quét bằng Camera</md-text-button>
+        </div>
+    </md-dialog>
+
     <div id="result-drawer" class="drawer">
         <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6"></div>
         
@@ -323,6 +335,7 @@
             qrCanvas: document.getElementById('qrcode-canvas'),
             cropDialog: document.getElementById('global-crop-dialog'),
             errDialog: document.getElementById('camera-error-dialog'),
+            uploadConfirmDialog: document.getElementById('upload-confirm-dialog'),
             embedContainer: document.getElementById('embed-container'),
             previewIframe: document.getElementById('link-preview-iframe'),
             previewLoading: document.getElementById('preview-loading-box'),
@@ -454,12 +467,11 @@
                     await startCamera(ui.camSelect.value);
                     ui.camSelect.onchange = () => startCamera(ui.camSelect.value);
 
-                    // Chiêu cuối 2: Fill ID camera vào dropdown sau 1s
+                    // Chiêu cuối: Fill tên camera sau 1s
                     setTimeout(() => {
                         const track = html5QrCode?.getRunningTrack();
                         if (track) {
                            const settings = track.getSettings();
-                           // Cố gắng tìm và set giá trị select khớp với camera đang chạy
                            const currentCam = devs.find(d => d.id.includes(settings.deviceId) || settings.label?.includes(d.label));
                            if (currentCam) ui.camSelect.value = currentCam.id;
                         }
@@ -514,6 +526,19 @@
             }
         }
 
+        // Logic check URL khi load trang (Chiêu mới của Phong)
+        function checkURLParams() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('upload') === 'true') {
+                // Xóa param ngay lập tức để tránh loop load lại
+                const newURL = window.location.pathname;
+                window.history.replaceState({}, document.title, newURL);
+                
+                // Hiện dialog lựa chọn
+                ui.uploadConfirmDialog.show();
+            }
+        }
+
         ui.snapshotBtn.onclick = async () => {
             const video = ui.reader.querySelector('video');
             if (!video) return;
@@ -527,7 +552,21 @@
             deepScan(lastFile);
         };
 
-        document.getElementById('upload-btn').onclick = () => document.getElementById('file-input').click();
+        // Nút "Tải ảnh" chính: Reload kèm tham số ?upload=true
+        document.getElementById('upload-btn').onclick = () => {
+            window.location.href = window.location.pathname + '?upload=true';
+        };
+
+        // Các hành động trong Dialog mới
+        document.getElementById('confirm-upload-action').onclick = () => {
+            ui.uploadConfirmDialog.close();
+            document.getElementById('file-input').click();
+        };
+        document.getElementById('confirm-camera-action').onclick = () => {
+            ui.uploadConfirmDialog.close();
+            initCamera();
+        };
+
         document.getElementById('error-upload-btn').onclick = () => document.getElementById('file-input').click();
         document.getElementById('dialog-upload-btn').onclick = () => { ui.errDialog.close(); document.getElementById('file-input').click(); };
         document.getElementById('dialog-close-btn').onclick = () => ui.errDialog.close();
@@ -559,10 +598,7 @@
             reader.readAsDataURL(lastFile);
         };
 
-        // Chiêu cuối 1: Reload trang khi quay lại camera để dọn dẹp cache/ảnh tĩnh
-        ui.resumeCamBtn.onclick = () => { 
-            window.location.reload();
-        };
+        ui.resumeCamBtn.onclick = () => window.location.reload();
         
         document.getElementById('close-result-btn').onclick = () => {
             ui.resDrawer.classList.remove('show');
@@ -578,11 +614,7 @@
             if (html5QrCode?.isScanning) html5QrCode.stop(); 
         };
         
-        document.getElementById('close-gen-btn').onclick = () => { 
-            ui.genDrawer.classList.remove('show'); 
-            // Chiêu cuối 1: Reload khi bấm hủy trong phần tạo QR
-            window.location.reload();
-        };
+        document.getElementById('close-gen-btn').onclick = () => window.location.reload();
 
         document.getElementById('copy-btn').onclick = () => copyToClipboard(ui.qrText.innerText);
 
@@ -650,7 +682,10 @@
             a.click();
         };
 
-        window.onload = initCamera;
+        window.onload = () => {
+            initCamera();
+            checkURLParams();
+        };
     </script>
 </body>
 </html>
